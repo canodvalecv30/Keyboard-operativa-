@@ -1,0 +1,6 @@
+{
+  "name": "Spam de la Operativa Keyboard",
+  "description": "Custom auto paste keyboard for fast replies, canned text, macros, and snippet management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
