@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,7 +49,6 @@ import com.example.ui.screens.AppBackgroundView
 import com.example.ui.screens.KeyboardSandboxScreen
 import com.example.ui.screens.KeyboardSettingsScreen
 import com.example.ui.screens.LockScreen
-import com.example.ui.screens.PresetTemplatesScreen
 import com.example.ui.screens.SnippetsManagerScreen
 import com.example.ui.theme.AutoPasteTheme
 import com.example.ui.viewmodel.MainViewModel
@@ -58,7 +56,6 @@ import com.example.ui.viewmodel.MainViewModel
 enum class NavigationTab(val title: String, val icon: ImageVector) {
     SANDBOX("Teclado", Icons.Default.Keyboard),
     SNIPPETS("Snippets", Icons.Default.ListAlt),
-    PRESETS("Plantillas", Icons.Default.LibraryAdd),
     SETTINGS("Ajustes", Icons.Default.Settings)
 }
 
@@ -164,11 +161,10 @@ class MainActivity : ComponentActivity() {
                                 when (selectedTab) {
                                     0 -> KeyboardSandboxScreen(
                                         viewModel = viewModel,
-                                        onOpenSettings = { selectedTab = 3 }
+                                        onOpenSettings = { selectedTab = 2 }
                                     )
                                     1 -> SnippetsManagerScreen(viewModel = viewModel)
-                                    2 -> PresetTemplatesScreen(viewModel = viewModel)
-                                    3 -> KeyboardSettingsScreen(
+                                    2 -> KeyboardSettingsScreen(
                                         viewModel = viewModel,
                                         isAdmin = isAdmin,
                                         onAdminStatusChange = { newAdmin -> isAdmin = newAdmin }
