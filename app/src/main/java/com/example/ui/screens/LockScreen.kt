@@ -60,40 +60,34 @@ fun LockScreen(
     }
 
     val prefs = viewModel.preferences
+    val onlineAuth = viewModel.onlineAuth
     val currentBg by viewModel.appBackground.collectAsState()
-    val adminPass = remember { prefs.adminPassword }
-    val userPass = remember { prefs.userPassword }
-    val customUsers = remember { prefs.getCustomUsers() }
-    val customAdmins = remember { prefs.getCustomAdmins() }
+    val isOnline by remember { mutableStateOf(onlineAuth.isNetworkAvailable()) }
 
     fun verifyPassword() {
-        val trimmed = password.trim()
-        if (trimmed == adminPass || customAdmins.any { it.second == trimmed }) {
-            focusManager.clearFocus()
-            keyboardController?.hide()
-            onUnlocked(true) // Admin mode has full access & no expiration
-        } else {
-            // Find matched user
-            val username = if (trimmed == userPass) {
-                "General"
-            } else {
-                customUsers.firstOrNull { it.second == trimmed }?.first
+        if (password.isBlank()) {
+            showError = true
+            errorMessage = "Introduce tu contraseña o PIN"
+            return
+        }
+        val result = onlineAuth.authenticate(password)
+        when (result) {
+            is com.example.data.auth.AuthResult.Success -> {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+                onUnlocked(result.isAdmin)
             }
-
-            if (username != null) {
-                if (prefs.isUserExpired(username)) {
-                    showError = true
-                    val daysLeft = prefs.getDaysRemaining(username)
-                    errorMessage = "❌ Tu periodo de 1 mes (30 días) ha expirado. Contacta al Administrador para renovar tu acceso."
-                } else {
-                    prefs.recordUserLogin(username)
-                    focusManager.clearFocus()
-                    keyboardController?.hide()
-                    onUnlocked(false) // User mode
-                }
-            } else {
+            is com.example.data.auth.AuthResult.Expired -> {
                 showError = true
-                errorMessage = "❌ Contraseña incorrecta. (Usuario: 1234 | Admin: admin123)"
+                errorMessage = result.message
+            }
+            is com.example.data.auth.AuthResult.Blocked -> {
+                showError = true
+                errorMessage = result.message
+            }
+            is com.example.data.auth.AuthResult.InvalidCredentials -> {
+                showError = true
+                errorMessage = result.message
             }
         }
     }
@@ -150,6 +144,28 @@ fun LockScreen(
                     )
                 }
 
+                // Online Status Badge
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isOnline) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFF59E0B).copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = 1.dp,
+                        color = if (isOnline) Color(0xFF10B981) else Color(0xFFF59E0B)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isOnline) "🟢 Servidor En Línea • Validación Activa" else "🟠 Modo Local • Sin Conexión",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isOnline) Color(0xFF10B981) else Color(0xFFF59E0B)
+                        )
+                    }
+                }
+
                 Text(
                     text = "Acceso Protegido",
                     style = MaterialTheme.typography.headlineSmall,
@@ -173,8 +189,8 @@ fun LockScreen(
                         password = it
                         showError = false
                     },
-                    label = { Text("Contraseña o Código Admin") },
-                    placeholder = { Text("Ej: 1234 o admin123") },
+                    label = { Text("Contraseña o PIN (David / Usuario / Admin)") },
+                    placeholder = { Text("Ej: 046 (David), 1234, admin123") },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -229,7 +245,7 @@ fun LockScreen(
 
                 if (showError) {
                     Text(
-                        text = if (errorMessage.isNotBlank()) errorMessage else "❌ Contraseña incorrecta. (Usuario: 1234 | Admin: admin123)",
+                        text = if (errorMessage.isNotBlank()) errorMessage else "❌ Credencial incorrecta. (David: 046 | General: 1234 | Admin: admin123)",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                         fontWeight = FontWeight.Medium,
@@ -248,7 +264,7 @@ fun LockScreen(
                     )
                 ) {
                     Text(
-                        text = "🔓 Desbloquear",
+                        text = "🔓 Desbloquear con Validación Online",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -256,7 +272,7 @@ fun LockScreen(
                 }
 
                 Text(
-                    text = "💡 Usuario: 1234 | Admin: admin123",
+                    text = "💡 David: 046 | General: 1234 | Admin: admin123",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
                     textAlign = TextAlign.Center,

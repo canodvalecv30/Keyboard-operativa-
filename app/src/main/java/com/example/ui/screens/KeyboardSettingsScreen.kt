@@ -120,257 +120,256 @@ fun KeyboardSettingsScreen(
                         imageVector = Icons.Default.Settings,
                         contentDescription = null,
                         tint = Color(0xFF8B5CF6),
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(28.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "🔐 Panel de Administración y Contraseñas",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Column {
+                        Text(
+                            text = "🌐 Panel de Usuarios y Contraseñas Online",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Sincronización en la nube, licencias de 1 mes y gestión de David y usuarios",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                val onlineAuth = viewModel.onlineAuth
+                val isOnline by remember { mutableStateOf(onlineAuth.isNetworkAvailable()) }
+                val isSyncing by viewModel.isSyncingOnline.collectAsState()
+                var syncFeedback by remember { mutableStateOf(onlineAuth.lastSyncMessage) }
+
+                // Live Online Status Banner
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isOnline) Color(0xFF10B981).copy(alpha = 0.12f) else Color(0xFFF59E0B).copy(alpha = 0.12f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = 1.dp,
+                        color = if (isOnline) Color(0xFF10B981) else Color(0xFFF59E0B)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isOnline) "🟢 Modo En Línea (Online Conectado)" else "🟠 Modo Local (Offline)",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isOnline) Color(0xFF10B981) else Color(0xFFF59E0B)
+                            )
+                            Text(
+                                text = syncFeedback,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                viewModel.syncOnline { success, msg ->
+                                    syncFeedback = msg
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            enabled = !isSyncing,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6))
+                        ) {
+                            Text(if (isSyncing) "Sincronizando..." else "🔄 Sincronizar", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
                 }
 
                 if (isAdmin) {
                     Text(
-                        text = "Modo Administrador Activo. Registra nuevos usuarios y gestiona credenciales.",
+                        text = "👑 Modo Administrador Activo: Registra, renueva y administra las contraseñas de usuarios en línea.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
                     )
 
-                    var tempUserPass by remember { mutableStateOf(prefs.userPassword) }
-                    var tempAdminPass by remember { mutableStateOf(prefs.adminPassword) }
+                    // Cloud Server URL & JSON Tools Dialog state
+                    var showServerConfigDialog by remember { mutableStateOf(false) }
+                    var showJsonImportDialog by remember { mutableStateOf(false) }
 
-                    OutlinedTextField(
-                        value = tempUserPass,
-                        onValueChange = { tempUserPass = it },
-                        label = { Text("Contraseña de Usuario General") },
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = tempAdminPass,
-                        onValueChange = { tempAdminPass = it },
-                        label = { Text("Código de Administrador") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    Button(
-                        onClick = {
-                            prefs.userPassword = tempUserPass.trim()
-                            prefs.adminPassword = tempAdminPass.trim()
-                            Toast.makeText(context, "¡Contraseñas principales actualizadas!", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
-                        modifier = Modifier.fillMaxWidth()
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Guardar Contraseñas Principales", color = Color.White)
+                        OutlinedButton(
+                            onClick = { showServerConfigDialog = true },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Servidor Cloud", style = MaterialTheme.typography.labelSmall)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                val json = onlineAuth.exportUsersJson()
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("Usuarios Online JSON", json)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Configuración JSON copiada al portapapeles", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Exportar JSON", style = MaterialTheme.typography.labelSmall)
+                        }
+
+                        OutlinedButton(
+                            onClick = { showJsonImportDialog = true },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Importar JSON", style = MaterialTheme.typography.labelSmall)
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(8.dp))
+                    if (showServerConfigDialog) {
+                        var tempUrl by remember { mutableStateOf(onlineAuth.onlineServerUrl) }
+                        AlertDialog(
+                            onDismissRequest = { showServerConfigDialog = false },
+                            title = { Text("Configurar Servidor Online") },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        "Ingresa la URL del servidor o webhook para sincronizar contraseñas y renovaciones online:",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    OutlinedTextField(
+                                        value = tempUrl,
+                                        onValueChange = { tempUrl = it },
+                                        label = { Text("URL Servidor / Endpoint") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                Button(onClick = {
+                                    onlineAuth.onlineServerUrl = tempUrl.trim()
+                                    showServerConfigDialog = false
+                                    Toast.makeText(context, "URL de servidor online guardada", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Text("Guardar")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showServerConfigDialog = false }) {
+                                    Text("Cancelar")
+                                }
+                            }
+                        )
+                    }
 
-                    // --- PANEL PARA AGREGAR ADMINISTRADORES ---
+                    if (showJsonImportDialog) {
+                        var inputJson by remember { mutableStateOf("") }
+                        AlertDialog(
+                            onDismissRequest = { showJsonImportDialog = false },
+                            title = { Text("Importar Usuarios desde JSON") },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("Pega el JSON con la lista de usuarios y contraseñas autorizados:", style = MaterialTheme.typography.bodySmall)
+                                    OutlinedTextField(
+                                        value = inputJson,
+                                        onValueChange = { inputJson = it },
+                                        placeholder = { Text("[{\"username\":\"David\",\"password\":\"046\",\"role\":\"ADMIN\"}]") },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(140.dp)
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                Button(onClick = {
+                                    val count = onlineAuth.importUsersFromJson(inputJson)
+                                    if (count > 0) {
+                                        viewModel.refreshOnlineUsers()
+                                        showJsonImportDialog = false
+                                        Toast.makeText(context, "$count usuarios importados exitosamente", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Formato JSON inválido", Toast.LENGTH_SHORT).show()
+                                    }
+                                }) {
+                                    Text("Importar")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showJsonImportDialog = false }) {
+                                    Text("Cancelar")
+                                }
+                            }
+                        )
+                    }
+
+                    HorizontalDivider()
+
+                    // Master Admin Password change
+                    var tempAdminPass by remember { mutableStateOf(prefs.adminPassword) }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = tempAdminPass,
+                            onValueChange = { tempAdminPass = it },
+                            label = { Text("Código de Administrador Maestro") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        Button(
+                            onClick = {
+                                prefs.adminPassword = tempAdminPass.trim()
+                                Toast.makeText(context, "Código de Administrador actualizado", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6))
+                        ) {
+                            Text("Guardar", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+
+                    HorizontalDivider()
+
+                    // --- PANEL DE USUARIOS REGISTRADOS ---
+                    val onlineUsersList by viewModel.onlineUsers.collectAsState()
+
                     Text(
-                        text = "👑 Panel para Agregar Administradores",
+                        text = "👥 Cuentas y Contraseñas Registradas (${onlineUsersList.size}):",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF8B5CF6)
                     )
 
-                    var newAdminName by remember { mutableStateOf("") }
-                    var newAdminPassInput by remember { mutableStateOf("") }
-                    var customAdminsList by remember { mutableStateOf(prefs.getCustomAdmins()) }
-
-                    OutlinedTextField(
-                        value = newAdminName,
-                        onValueChange = { newAdminName = it },
-                        label = { Text("Nombre del Nuevo Administrador") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = newAdminPassInput,
-                        onValueChange = { newAdminPassInput = it },
-                        label = { Text("Contraseña/PIN de Administrador") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    Button(
-                        onClick = {
-                            if (newAdminName.isNotBlank() && newAdminPassInput.isNotBlank()) {
-                                prefs.addCustomAdmin(newAdminName.trim(), newAdminPassInput.trim())
-                                customAdminsList = prefs.getCustomAdmins()
-                                newAdminName = ""
-                                newAdminPassInput = ""
-                                Toast.makeText(context, "¡Nuevo Administrador registrado!", Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(context, "Completa nombre y contraseña de administrador", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("➕ Agregar Administrador", color = Color.White)
-                    }
-
-                    if (customAdminsList.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Administradores Registrados (${customAdminsList.size}):",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        customAdminsList.forEach { (aName, aPass) ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(10.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text(text = "👑 Admin: $aName", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                        Text(text = "PIN/Pass: $aPass", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    IconButton(onClick = {
-                                        prefs.removeCustomAdmin(aName)
-                                        customAdminsList = prefs.getCustomAdmins()
-                                        Toast.makeText(context, "Administrador $aName eliminado", Toast.LENGTH_SHORT).show()
-                                    }) {
-                                        Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = "Eliminar administrador",
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(8.dp))
-
                     Text(
-                        text = "👥 Panel de Control de Usuarios (1 Mes Limit)",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        text = "Incluye a David (Admin), General y cuentas personalizadas con expiración de 1 mes.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    var newUsername by remember { mutableStateOf("") }
-                    var newUserPassword by remember { mutableStateOf("") }
-                    var customUsersList by remember { mutableStateOf(prefs.getCustomUsers()) }
-                    var refreshTrigger by remember { mutableStateOf(0) }
-
-                    // General User Info Card
-                    val genRemaining = prefs.getDaysRemaining("General")
-                    val genExpired = prefs.isUserExpired("General")
-                    val genLastActive = prefs.getUserLastActiveTimestamp("General")
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(text = "👤 Usuario General (Predeterminado)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                    Text(
-                                        text = if (genExpired) "🔴 Expirado (0 días restantes)" else "🟢 Activo ($genRemaining días de uso restantes)",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (genExpired) MaterialTheme.colorScheme.error else Color(0xFF10B981)
-                                    )
-                                    if (genLastActive > 0L) {
-                                        val sdf = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
-                                        Text(
-                                            text = "Última actividad: ${sdf.format(java.util.Date(genLastActive))}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                                Button(
-                                    onClick = {
-                                        prefs.renewUserSubscription("General")
-                                        refreshTrigger++
-                                        Toast.makeText(context, "Suscripción de Usuario General renovada a 30 días", Toast.LENGTH_SHORT).show()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6))
-                                ) {
-                                    Text("🔄 Renovar 1 Mes", style = MaterialTheme.typography.labelSmall)
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = newUsername,
-                        onValueChange = { newUsername = it },
-                        label = { Text("Nombre del Nuevo Usuario") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = newUserPassword,
-                        onValueChange = { newUserPassword = it },
-                        label = { Text("Contraseña/PIN del Usuario") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    Button(
-                        onClick = {
-                            if (newUsername.isNotBlank() && newUserPassword.isNotBlank()) {
-                                prefs.addCustomUser(newUsername.trim(), newUserPassword.trim())
-                                prefs.recordUserLogin(newUsername.trim())
-                                customUsersList = prefs.getCustomUsers()
-                                newUsername = ""
-                                newUserPassword = ""
-                                Toast.makeText(context, "¡Usuario registrado y activado por 1 mes!", Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(context, "Completa usuario y contraseña", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("➕ Registrar y Autorizar Usuario (1 Mes)", color = Color.White)
-                    }
-
-                    if (customUsersList.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Usuarios Personalizados Registrados (${customUsersList.size}):",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        customUsersList.forEach { (uname, upass) ->
-                            val daysLeft = prefs.getDaysRemaining(uname)
-                            val isExp = prefs.isUserExpired(uname)
-                            val lastAct = prefs.getUserLastActiveTimestamp(uname)
-
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        onlineUsersList.forEach { user ->
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (user.role == "ADMIN" || user.role == "MASTER_ADMIN")
+                                        Color(0xFF8B5CF6).copy(alpha = 0.08f)
+                                    else
+                                        MaterialTheme.colorScheme.surface
+                                )
                             ) {
                                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Row(
@@ -379,46 +378,94 @@ fun KeyboardSettingsScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(text = "👤 $uname", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                            Text(text = "PIN/Pass: $upass", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            Text(
-                                                text = if (isExp) "🔴 Expirado (0 días restantes)" else "🟢 Activo ($daysLeft días restantes)",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = if (isExp) MaterialTheme.colorScheme.error else Color(0xFF10B981)
-                                            )
-                                            if (lastAct > 0L) {
-                                                val sdf = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Text(
-                                                    text = "Última actividad: ${sdf.format(java.util.Date(lastAct))}",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    text = if (user.role == "ADMIN" || user.role == "MASTER_ADMIN") "👑 ${user.username}" else "👤 ${user.username}",
+                                                    fontWeight = FontWeight.Bold,
+                                                    style = MaterialTheme.typography.bodyMedium
                                                 )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = if (user.role == "ADMIN") Color(0xFF8B5CF6).copy(alpha = 0.2f) else Color(0xFF10B981).copy(alpha = 0.2f)
+                                                ) {
+                                                    Text(
+                                                        text = if (user.role == "ADMIN") "ADMIN" else "1 MES",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = if (user.role == "ADMIN") Color(0xFF8B5CF6) else Color(0xFF10B981),
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                    )
+                                                }
                                             }
+
+                                            Text(
+                                                text = "PIN/Contraseña: ${user.password}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+
+                                            val statusText = when {
+                                                user.isBlocked -> "🚫 Bloqueado por Administrador"
+                                                user.isExpired -> "🔴 Expirado (0 días restantes)"
+                                                user.role == "ADMIN" -> "🟢 Acceso Permanente (Online)"
+                                                else -> "🟢 Activo (${user.daysRemaining} días restantes)"
+                                            }
+                                            val statusColor = when {
+                                                user.isBlocked || user.isExpired -> MaterialTheme.colorScheme.error
+                                                else -> Color(0xFF10B981)
+                                            }
+
+                                            Text(
+                                                text = statusText,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = statusColor
+                                            )
                                         }
 
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Button(
-                                                onClick = {
-                                                    prefs.renewUserSubscription(uname)
-                                                    refreshTrigger++
-                                                    Toast.makeText(context, "Acceso renovado por 1 mes para $uname", Toast.LENGTH_SHORT).show()
-                                                },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6))
-                                            ) {
-                                                Text("🔄 1 Mes", style = MaterialTheme.typography.labelSmall)
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            if (user.role != "ADMIN" && user.role != "MASTER_ADMIN") {
+                                                Button(
+                                                    onClick = {
+                                                        onlineAuth.renewUser(user.username, 30)
+                                                        viewModel.refreshOnlineUsers()
+                                                        Toast.makeText(context, "Licencia renovada por 1 mes para ${user.username}", Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                                                ) {
+                                                    Text("🔄 +30 Días", style = MaterialTheme.typography.labelSmall)
+                                                }
                                             }
 
-                                            IconButton(onClick = {
-                                                prefs.removeCustomUser(uname)
-                                                customUsersList = prefs.getCustomUsers()
-                                                Toast.makeText(context, "Usuario $uname eliminado", Toast.LENGTH_SHORT).show()
-                                            }) {
+                                            IconButton(
+                                                onClick = {
+                                                    onlineAuth.toggleBlockUser(user.username)
+                                                    viewModel.refreshOnlineUsers()
+                                                    Toast.makeText(context, "Estado de ${user.username} modificado", Toast.LENGTH_SHORT).show()
+                                                }
+                                            ) {
                                                 Icon(
-                                                    imageVector = Icons.Default.Delete,
-                                                    contentDescription = "Eliminar usuario",
-                                                    tint = MaterialTheme.colorScheme.error
+                                                    imageVector = if (user.isBlocked) Icons.Default.CheckCircle else Icons.Default.Info,
+                                                    contentDescription = "Bloquear o Desbloquear",
+                                                    tint = if (user.isBlocked) Color(0xFF10B981) else Color(0xFFF59E0B)
                                                 )
+                                            }
+
+                                            if (!user.username.equals("Admin", ignoreCase = true)) {
+                                                IconButton(
+                                                    onClick = {
+                                                        onlineAuth.removeUser(user.username)
+                                                        viewModel.refreshOnlineUsers()
+                                                        Toast.makeText(context, "Cuenta ${user.username} eliminada", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Delete,
+                                                        contentDescription = "Eliminar cuenta",
+                                                        tint = MaterialTheme.colorScheme.error
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -427,7 +474,82 @@ fun KeyboardSettingsScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider()
+
+                    // --- REGISTRAR NUEVA CUENTA ONLINE ---
+                    Text(
+                        text = "➕ Registrar Nueva Cuenta Online",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF8B5CF6)
+                    )
+
+                    var newAccountName by remember { mutableStateOf("") }
+                    var newAccountPass by remember { mutableStateOf("") }
+                    var newAccountIsAdmin by remember { mutableStateOf(false) }
+
+                    OutlinedTextField(
+                        value = newAccountName,
+                        onValueChange = { newAccountName = it },
+                        label = { Text("Nombre de Usuario (ej: David, Operativa)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = newAccountPass,
+                        onValueChange = { newAccountPass = it },
+                        label = { Text("Contraseña o PIN de Acceso") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = if (newAccountIsAdmin) "👑 Rol: Administrador (Sin límite)" else "👤 Rol: Usuario Normal (1 Mes)",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (newAccountIsAdmin) Color(0xFF8B5CF6) else Color(0xFF10B981)
+                        )
+                        Switch(
+                            checked = newAccountIsAdmin,
+                            onCheckedChange = { newAccountIsAdmin = it }
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            if (newAccountName.isNotBlank() && newAccountPass.isNotBlank()) {
+                                val newUser = com.example.data.auth.OnlineUser(
+                                    username = newAccountName.trim(),
+                                    password = newAccountPass.trim(),
+                                    role = if (newAccountIsAdmin) "ADMIN" else "USER",
+                                    activationTimestamp = System.currentTimeMillis(),
+                                    durationDays = if (newAccountIsAdmin) 9999 else 30,
+                                    isBlocked = false,
+                                    lastActiveTimestamp = System.currentTimeMillis(),
+                                    onlineStatus = "ONLINE_SYNCED"
+                                )
+                                onlineAuth.addOrUpdateUser(newUser)
+                                viewModel.refreshOnlineUsers()
+                                newAccountName = ""
+                                newAccountPass = ""
+                                Toast.makeText(context, "¡Cuenta registrada y sincronizada online!", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Completa nombre y contraseña", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("➕ Registrar y Autorizar Online", color = Color.White)
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
                     OutlinedButton(
                         onClick = { onAdminStatusChange(false) },
                         modifier = Modifier.fillMaxWidth()
@@ -436,7 +558,7 @@ fun KeyboardSettingsScreen(
                     }
                 } else {
                     Text(
-                        text = "Estás en modo usuario normal. Para registrar o cambiar contraseñas, necesitas iniciar sesión con el código de Administrador.",
+                        text = "Estás en modo usuario normal. Para registrar usuarios, crear administradores (David) o renovar licencias online, inicia sesión como Administrador.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -894,6 +1016,72 @@ fun KeyboardSettingsScreen(
                         prefs.isDarkTheme = it
                     }
                 )
+            }
+        }
+
+        // 2.3. Personalización de Fondo de Pantalla
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = Color(0xFF8B5CF6),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "🎨 Fondo de Pantalla y Personalización",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Text(
+                    text = "Elige el diseño visual de fondo para el teclado y la aplicación.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                val currentBg by viewModel.appBackground.collectAsState()
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val presets = listOf(
+                        "PRESET_DEFAULT" to "🖼️ Operativa",
+                        "PRESET_NEON" to "🌌 Neon",
+                        "PRESET_GOLD" to "👑 Oro"
+                    )
+                    presets.forEach { (presetKey, label) ->
+                        val isSelected = currentBg == presetKey
+                        Button(
+                            onClick = {
+                                viewModel.updateAppBackground(presetKey)
+                                Toast.makeText(context, "Fondo aplicado: $label", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isSelected) Color(0xFF8B5CF6) else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(label, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
             }
         }
 

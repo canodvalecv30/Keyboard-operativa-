@@ -20,6 +20,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getDatabase(application)
     val repository = SnippetRepository(database.categoryDao(), database.snippetDao())
     val preferences = PreferencesRepository(application)
+    val onlineAuth = com.example.data.auth.OnlineAuthManager(application, preferences)
+
+    private val _onlineUsers = MutableStateFlow(onlineAuth.getUsers())
+    val onlineUsers: StateFlow<List<com.example.data.auth.OnlineUser>> = _onlineUsers
+
+    private val _isSyncingOnline = MutableStateFlow(false)
+    val isSyncingOnline: StateFlow<Boolean> = _isSyncingOnline
+
+    fun refreshOnlineUsers() {
+        _onlineUsers.value = onlineAuth.getUsers()
+    }
+
+    fun syncOnline(onComplete: (Boolean, String) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            _isSyncingOnline.value = true
+            val (success, message) = onlineAuth.syncWithOnlineServer()
+            _onlineUsers.value = onlineAuth.getUsers()
+            _isSyncingOnline.value = false
+            onComplete(success, message)
+        }
+    }
 
     private val _appBackground = MutableStateFlow(preferences.appBackground)
     val appBackground: StateFlow<String> = _appBackground
