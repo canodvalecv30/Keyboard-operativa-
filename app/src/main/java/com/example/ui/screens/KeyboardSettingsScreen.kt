@@ -86,6 +86,7 @@ fun KeyboardSettingsScreen(
     var isGridMode by remember { mutableStateOf(prefs.isGridMode) }
     var gridColumnCount by remember { mutableIntStateOf(prefs.gridColumnCount) }
     var isAutoSendActive by remember { mutableStateOf(prefs.isAutoSendActive) }
+    var showFloatingCancel by remember { mutableStateOf(prefs.showFloatingCancelButton) }
     var isButtonsReversed by remember { mutableStateOf(prefs.isButtonsReversed) }
 
     var showImportJsonDialog by remember { mutableStateOf(false) }
@@ -962,6 +963,17 @@ fun KeyboardSettingsScreen(
                     }
                 )
 
+                // Floating Cancel Button Switch
+                SettingSwitchRow(
+                    title = "🛑 Botón Flotante para Cancelar lo Automático",
+                    description = "Muestra un botón flotante móvil para detener al instante cualquier ráfaga, envío múltiple o cancelar el auto-envío.",
+                    checked = showFloatingCancel,
+                    onCheckedChange = {
+                        showFloatingCancel = it
+                        prefs.showFloatingCancelButton = it
+                    }
+                )
+
                 // Buttons Reversed Switch (Lado del teclado / Modo Zurdo)
                 SettingSwitchRow(
                     title = "↔️ Acomodar Botones al Otro Lado",
@@ -1356,7 +1368,7 @@ fun KeyboardSettingsScreen(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "y los hermanos: el N , el cuñado 046",
+                    text = "y los hermanos: el N",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

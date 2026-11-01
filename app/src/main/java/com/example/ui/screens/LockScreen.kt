@@ -309,7 +309,7 @@ fun LockScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "y los hermanos: el N , el cuñado 046",
+                            text = "y los hermanos: el N",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant

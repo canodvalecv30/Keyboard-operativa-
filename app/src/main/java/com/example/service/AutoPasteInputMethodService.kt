@@ -117,9 +117,12 @@ class AutoPasteInputMethodService : InputMethodService(),
                     initialUltraFastMode = safePrefs.ultraFastMode,
                     initialGridMode = safePrefs.isGridMode,
                     initialAutoSendActive = safePrefs.isAutoSendActive,
+                    initialShowFloatingCancel = safePrefs.showFloatingCancelButton,
                     initialColumnCount = safePrefs.gridColumnCount,
                     initialButtonsReversed = safePrefs.isButtonsReversed,
                     onUpdateButtonsReversed = { safePrefs.isButtonsReversed = it },
+                    onUpdateAutoSendActive = { safePrefs.isAutoSendActive = it },
+                    onUpdateShowFloatingCancel = { safePrefs.showFloatingCancelButton = it },
                     onUpdateBurstDelay = { newDelay ->
                         safePrefs.burstDelayMs = newDelay
                     },

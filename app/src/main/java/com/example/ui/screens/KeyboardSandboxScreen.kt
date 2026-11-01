@@ -286,9 +286,12 @@ fun KeyboardSandboxScreen(
                 keyHeightScale = viewModel.preferences.keyHeightScale,
                 initialGridMode = viewModel.preferences.isGridMode,
                 initialAutoSendActive = viewModel.preferences.isAutoSendActive,
+                initialShowFloatingCancel = viewModel.preferences.showFloatingCancelButton,
                 initialColumnCount = viewModel.preferences.gridColumnCount,
                 initialButtonsReversed = viewModel.preferences.isButtonsReversed,
                 onUpdateButtonsReversed = { viewModel.preferences.isButtonsReversed = it },
+                onUpdateAutoSendActive = { viewModel.preferences.isAutoSendActive = it },
+                onUpdateShowFloatingCancel = { viewModel.preferences.showFloatingCancelButton = it },
                 initialBurstDelayMs = viewModel.preferences.burstDelayMs,
                 onUpdateBurstDelay = { newDelay ->
                     viewModel.preferences.burstDelayMs = newDelay

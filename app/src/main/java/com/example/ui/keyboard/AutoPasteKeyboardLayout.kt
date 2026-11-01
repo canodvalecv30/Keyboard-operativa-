@@ -7,9 +7,14 @@ import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,9 +43,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backspace
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.KeyboardReturn
@@ -47,6 +55,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SpaceBar
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.AlertDialog
@@ -86,6 +96,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.CategoryEntity
@@ -109,6 +122,7 @@ fun AutoPasteKeyboardLayout(
     initialUltraFastMode: Boolean = true,
     initialGridMode: Boolean = true,
     initialAutoSendActive: Boolean = true,
+    initialShowFloatingCancel: Boolean = true,
     initialColumnCount: Int = 2,
     initialButtonsReversed: Boolean = false,
     onUpdateBurstDelay: (Long) -> Unit = {},
@@ -116,6 +130,8 @@ fun AutoPasteKeyboardLayout(
     onUpdateShowToastOnPaste: (Boolean) -> Unit = {},
     onUpdateUltraFastMode: (Boolean) -> Unit = {},
     onUpdateButtonsReversed: (Boolean) -> Unit = {},
+    onUpdateAutoSendActive: (Boolean) -> Unit = {},
+    onUpdateShowFloatingCancel: (Boolean) -> Unit = {},
     onFastPasteAndSend: ((String, Boolean) -> Unit)? = null,
     onInsertText: (String) -> Unit,
     onDeleteLastChar: () -> Unit,
@@ -163,6 +179,9 @@ fun AutoPasteKeyboardLayout(
     var isSearchActive by remember { mutableStateOf(false) }
     var isGridMode by remember(initialGridMode) { mutableStateOf(initialGridMode) }
     var isAutoSendActive by remember(initialAutoSendActive) { mutableStateOf(initialAutoSendActive) }
+    var showFloatingCancel by remember(initialShowFloatingCancel) { mutableStateOf(initialShowFloatingCancel) }
+    var fabOffsetX by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var fabOffsetY by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     var gridColumnCount by remember(defaultColumns) { mutableIntStateOf(defaultColumns) }
     var isButtonsReversed by remember(initialButtonsReversed) { mutableStateOf(initialButtonsReversed) }
 
@@ -250,13 +269,35 @@ fun AutoPasteKeyboardLayout(
         holdBurstJob = null
     }
 
-    fun stopContinuousBurst() {
+    fun cancelAllAutomatic() {
+        triggerHaptic()
+        val hadActiveJob = (burstJob?.isActive == true || holdBurstJob?.isActive == true || activeBurstSnippetId != null || isCustomBatchSending)
         burstJob?.cancel()
         burstJob = null
+        holdBurstJob?.cancel()
+        holdBurstJob = null
+        singlePasteJob?.cancel()
+        singlePasteJob = null
         activeBurstSnippetId = null
         isCustomBatchSending = false
         customBatchProgress = 0
         customBatchTotal = 0
+
+        if (hadActiveJob) {
+            Toast.makeText(context, "🛑 Envío automático cancelado con éxito", Toast.LENGTH_SHORT).show()
+        } else {
+            if (isAutoSendActive) {
+                isAutoSendActive = false
+                onUpdateAutoSendActive(false)
+                Toast.makeText(context, "⚡ Auto-Envío desactivado", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "🛑 Todo lo automático detenido", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun stopContinuousBurst() {
+        cancelAllAutomatic()
     }
 
     fun startCustomBatchSend(text: String, count: Int) {
@@ -339,11 +380,12 @@ fun AutoPasteKeyboardLayout(
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 6.dp
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 2.dp, bottom = 20.dp)
-        ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp, bottom = 20.dp)
+            ) {
             // Active Burst / Multi-Send Stop Pill Button (ultra-compacto & discreto)
             if (activeBurstSnippetId != null || isCustomBatchSending) {
                 Box(
@@ -438,6 +480,38 @@ fun AutoPasteKeyboardLayout(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Dedicated Cancel Auto Chip
+                item {
+                    val isRunning = activeBurstSnippetId != null || isCustomBatchSending || (burstJob?.isActive == true) || (holdBurstJob?.isActive == true)
+                    FilterChip(
+                        selected = isRunning,
+                        onClick = {
+                            cancelAllAutomatic()
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFFDC2626),
+                            selectedLabelColor = Color.White
+                        ),
+                        label = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.StopCircle,
+                                    contentDescription = "Cancelar lo Automático",
+                                    tint = if (isRunning) Color.White else Color(0xFFDC2626),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (isRunning) "🛑 Parar" else "🛑 Cancelar Auto",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        },
+                        modifier = Modifier.testTag("chip_cancel_autopaste")
+                    )
+                }
+
                 // Search toggle chip
                 item {
                     FilterChip(
@@ -895,8 +969,90 @@ fun AutoPasteKeyboardLayout(
             }
         }
 
+        val isAutomaticRunning = (burstJob?.isActive == true || holdBurstJob?.isActive == true || activeBurstSnippetId != null || isCustomBatchSending)
 
+        // Botón Flotante para Cancelar lo Automático
+        AnimatedVisibility(
+            visible = isAutomaticRunning || showFloatingCancel,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .offset { IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt()) }
+                .padding(end = 10.dp, bottom = 58.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = if (isAutomaticRunning) Color(0xFFDC2626) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
+                shadowElevation = 8.dp,
+                tonalElevation = 6.dp,
+                modifier = Modifier
+                    .testTag("btn_cancel_autopaste")
+                    .border(
+                        width = if (isAutomaticRunning) 2.dp else 1.dp,
+                        color = if (isAutomaticRunning) Color.White else Color(0xFFDC2626).copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(24.dp)
+                    )
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 4.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)
+                ) {
+                    // Drag handle
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .pointerInput(Unit) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    fabOffsetX += dragAmount.x
+                                    fabOffsetY += dragAmount.y
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DragHandle,
+                            contentDescription = "Mover botón flotante",
+                            tint = if (isAutomaticRunning) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    // Main clickable Cancel button
+                    Row(
+                        modifier = Modifier
+                            .clickable {
+                                cancelAllAutomatic()
+                            }
+                            .padding(vertical = 4.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.StopCircle,
+                            contentDescription = "Cancelar lo Automático",
+                            tint = if (isAutomaticRunning) Color.White else Color(0xFFDC2626),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Text(
+                            text = when {
+                                isCustomBatchSending -> "Cancelar ($customBatchProgress/$customBatchTotal)"
+                                activeBurstSnippetId != null -> "Cancelar Ráfaga"
+                                isAutomaticRunning -> "Cancelar Automático"
+                                isAutoSendActive -> "Auto: ON (Cancelar)"
+                                else -> "Cancelar Auto"
+                            },
+                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = if (isAutomaticRunning) Color.White else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        }
     }
+}
 }
 
 @Composable
