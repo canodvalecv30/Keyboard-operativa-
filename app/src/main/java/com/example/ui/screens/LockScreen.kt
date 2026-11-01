@@ -28,6 +28,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
@@ -269,6 +270,113 @@ fun LockScreen(
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HorizontalDivider(modifier = Modifier.weight(1f))
+                    Text(
+                        text = " O REGÍSTRATE ",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                    HorizontalDivider(modifier = Modifier.weight(1f))
+                }
+
+                // GOOGLE SIGN-IN & REGISTRATION (Core requirement)
+                val currentUserProfile by viewModel.currentUserProfile.collectAsState()
+                val isAuthLoading by viewModel.isAuthLoading.collectAsState()
+
+                if (currentUserProfile != null) {
+                    val profile = currentUserProfile!!
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF0F172A),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF38BDF8)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "👤 Sesión Activa: ${profile.displayName}",
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                fontSize = 13.sp
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF1E293B)
+                            ) {
+                                Text(
+                                    text = "ID DE CUENTA: ${profile.accountId}",
+                                    fontWeight = FontWeight.Black,
+                                    color = Color(0xFF38BDF8),
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                                )
+                            }
+                            Button(
+                                onClick = {
+                                    val isAdmin = profile.role == "admin"
+                                    onUnlocked(isAdmin)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                            ) {
+                                Text("Continuar como ${profile.displayName.take(15)}", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            viewModel.signInWithGoogle { success, msg ->
+                                if (success) {
+                                    val profile = viewModel.currentUserProfile.value
+                                    val isAdmin = profile?.role == "admin"
+                                    onUnlocked(isAdmin)
+                                } else if (msg != null) {
+                                    showError = true
+                                    errorMessage = msg
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        enabled = !isAuthLoading,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = Color(0xFF1F2937)
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFCBD5E1))
+                    ) {
+                        if (isAuthLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color(0xFF4285F4))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Registrando con Google...", color = Color(0xFF1F2937), fontWeight = FontWeight.Bold)
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                GoogleIconBadge(modifier = Modifier.size(22.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Registrarse o Entrar con Google",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1F2937),
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Text(

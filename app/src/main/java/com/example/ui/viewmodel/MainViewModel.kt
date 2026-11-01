@@ -3,11 +3,15 @@ package com.example.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.auth.GoogleAuthManager
 import com.example.data.db.AppDatabase
 import com.example.data.model.CategoryEntity
 import com.example.data.model.SnippetEntity
+import com.example.data.model.UserProfile
 import com.example.data.repository.PreferencesRepository
 import com.example.data.repository.SnippetRepository
+import com.example.data.repository.UserRepository
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +25,58 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val repository = SnippetRepository(database.categoryDao(), database.snippetDao())
     val preferences = PreferencesRepository(application)
     val onlineAuth = com.example.data.auth.OnlineAuthManager(application, preferences)
+
+    // Firebase Auth & User Profile Management with Account ID
+    val userRepository = UserRepository.create(application)
+    val googleAuthManager = GoogleAuthManager(application, userRepository)
+    private val firebaseAuth = FirebaseAuth.getInstance()
+
+    private val _currentUserProfile = MutableStateFlow<UserProfile?>(null)
+    val currentUserProfile: StateFlow<UserProfile?> = _currentUserProfile
+
+    private val _isAuthLoading = MutableStateFlow(false)
+    val isAuthLoading: StateFlow<Boolean> = _isAuthLoading
+
+    init {
+        firebaseAuth.addAuthStateListener { auth ->
+            val user = auth.currentUser
+            if (user != null) {
+                viewModelScope.launch {
+                    try {
+                        val profile = userRepository.getOrCreateProfile(user)
+                        _currentUserProfile.value = profile
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            } else {
+                _currentUserProfile.value = null
+            }
+        }
+    }
+
+    fun signInWithGoogle(onResult: (Boolean, String?) -> Unit) {
+        viewModelScope.launch {
+            _isAuthLoading.value = true
+            val result = googleAuthManager.signInWithGoogle()
+            _isAuthLoading.value = false
+            result.onSuccess { profile ->
+                if (profile != null) {
+                    _currentUserProfile.value = profile
+                    onResult(true, "¡Bienvenido ${profile.displayName}! ID de Cuenta: ${profile.accountId}")
+                } else {
+                    onResult(false, null)
+                }
+            }.onFailure { err ->
+                onResult(false, err.message ?: "Error al autenticar con Google")
+            }
+        }
+    }
+
+    fun signOutGoogle() {
+        googleAuthManager.signOut()
+        _currentUserProfile.value = null
+    }
 
     private val _onlineUsers = MutableStateFlow(onlineAuth.getUsers())
     val onlineUsers: StateFlow<List<com.example.data.auth.OnlineUser>> = _onlineUsers

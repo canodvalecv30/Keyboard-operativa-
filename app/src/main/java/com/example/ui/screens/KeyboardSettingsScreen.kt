@@ -112,6 +112,9 @@ fun KeyboardSettingsScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // Official Google Account & Unique ID Profile Card
+        AccountProfileCard(viewModel = viewModel)
+
         // Fast Download & Phone Install Card
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),

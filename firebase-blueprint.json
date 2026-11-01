@@ -1,0 +1,44 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account profile with Google Sign-In and unique readable account ID",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Firebase Auth UID" },
+        "accountId": { "type": "string", "description": "Unique readable account identifier (e.g. OP-8603)" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "email": { "type": "string", "description": "User email address" },
+        "photoUrl": { "type": "string", "description": "User photo URL" },
+        "role": { "type": "string", "description": "User role: user or admin" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update" }
+      },
+      "required": ["id", "accountId", "email", "createdAt"]
+    },
+    "UserSnippet": {
+      "title": "UserSnippet",
+      "description": "User cloud synced keyboard snippet",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Snippet unique ID" },
+        "title": { "type": "string", "description": "Snippet title label" },
+        "content": { "type": "string", "description": "Snippet expansion text" },
+        "categoryId": { "type": "number", "description": "Category ID integer" },
+        "isFavorite": { "type": "boolean", "description": "Whether snippet is favorite" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["title", "content", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Stores user account information including unique account ID"
+    },
+    "/users/{userId}/snippets/{snippetId}": {
+      "schema": "UserSnippet",
+      "description": "Stores user personal snippets synced to the cloud"
+    }
+  }
+}

@@ -46,6 +46,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.collectAsState
 import com.example.ui.dialogs.FastDownloadDialog
 import com.example.ui.keyboard.FullDraggableFloatingCancelButton
@@ -136,6 +137,23 @@ class MainActivity : ComponentActivity() {
                                         }
                                     },
                                     actions = {
+                                        val profile by viewModel.currentUserProfile.collectAsState()
+                                        if (profile != null) {
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = Color(0xFF0F172A),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF38BDF8))
+                                            ) {
+                                                Text(
+                                                    text = profile!!.accountId,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFF38BDF8),
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                                )
+                                            }
+                                        }
+
                                         IconButton(
                                             onClick = { showFastDownloadDialog = true }
                                         ) {

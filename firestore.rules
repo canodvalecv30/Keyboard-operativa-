@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['id', 'accountId', 'email', 'createdAt']) &&
+        data.id is string &&
+        data.accountId is string &&
+        data.accountId.size() >= 4 &&
+        data.email is string &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidUserSnippet(data) {
+      return data.keys().hasAll(['title', 'content', 'createdAt']) &&
+        data.title is string && data.title.size() > 0 &&
+        data.content is string &&
+        data.createdAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUserProfile(request.resource.data);
+      allow update: if isOwner(userId) &&
+        request.resource.data.id == resource.data.id &&
+        request.resource.data.accountId == resource.data.accountId &&
+        request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+
+      match /snippets/{snippetId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidUserSnippet(request.resource.data);
+        allow update: if isOwner(userId) &&
+          request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}
