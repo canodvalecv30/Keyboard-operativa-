@@ -16,11 +16,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -45,6 +47,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
+import com.example.ui.dialogs.FastDownloadDialog
+import com.example.ui.keyboard.FullDraggableFloatingCancelButton
 import com.example.ui.screens.AppBackgroundView
 import com.example.ui.screens.KeyboardSandboxScreen
 import com.example.ui.screens.KeyboardSettingsScreen
@@ -73,6 +77,13 @@ class MainActivity : ComponentActivity() {
                 var isAuthenticated by remember { mutableStateOf(false) }
                 var isAdmin by remember { mutableStateOf(false) }
                 var selectedTab by remember { mutableIntStateOf(0) }
+                var showFastDownloadDialog by remember { mutableStateOf(false) }
+
+                if (showFastDownloadDialog) {
+                    FastDownloadDialog(
+                        onDismiss = { showFastDownloadDialog = false }
+                    )
+                }
 
                 if (!isAuthenticated) {
                     LockScreen(
@@ -119,7 +130,19 @@ class MainActivity : ComponentActivity() {
                                             Text(
                                                 text = if (isAdmin) "Spam de la Operativa (Admin)" else "Spam de la Operativa Keyboard",
                                                 fontWeight = FontWeight.Bold,
-                                                style = MaterialTheme.typography.titleLarge
+                                                style = MaterialTheme.typography.titleMedium,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    },
+                                    actions = {
+                                        IconButton(
+                                            onClick = { showFastDownloadDialog = true }
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Download,
+                                                contentDescription = "Descarga Rápida al Celular",
+                                                tint = Color(0xFF10B981)
                                             )
                                         }
                                     },
@@ -172,6 +195,11 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+
+                        // Full-Screen Draggable Floating Cancel Button (Moves across 100% of screen & never disappears when keyboard lowers)
+                        FullDraggableFloatingCancelButton(
+                            enabled = viewModel.preferences.showFloatingCancelButton
+                        )
                     }
                 }
             }

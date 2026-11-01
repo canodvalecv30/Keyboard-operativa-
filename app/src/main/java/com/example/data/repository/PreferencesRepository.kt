@@ -61,6 +61,10 @@ class PreferencesRepository(context: Context) {
         get() = try { prefs.getBoolean("show_floating_cancel", true) } catch (e: Exception) { true }
         set(value) { try { prefs.edit().putBoolean("show_floating_cancel", value).apply() } catch (e: Exception) {} }
 
+    var systemOverlayEnabled: Boolean
+        get() = try { prefs.getBoolean("system_overlay_enabled", false) } catch (e: Exception) { false }
+        set(value) { try { prefs.edit().putBoolean("system_overlay_enabled", value).apply() } catch (e: Exception) {} }
+
     var isButtonsReversed: Boolean
         get() = try { prefs.getBoolean("is_buttons_reversed", false) } catch (e: Exception) { false }
         set(value) { try { prefs.edit().putBoolean("is_buttons_reversed", value).apply() } catch (e: Exception) {} }

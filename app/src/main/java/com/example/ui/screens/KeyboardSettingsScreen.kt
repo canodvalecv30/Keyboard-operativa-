@@ -4,9 +4,12 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
+import com.example.service.FloatingCancelOverlayService
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -60,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.CategoryEntity
 import com.example.data.model.SnippetEntity
+import com.example.ui.dialogs.FastDownloadDialog
 import com.example.ui.viewmodel.MainViewModel
 import org.json.JSONArray
 import org.json.JSONObject
@@ -87,13 +91,19 @@ fun KeyboardSettingsScreen(
     var gridColumnCount by remember { mutableIntStateOf(prefs.gridColumnCount) }
     var isAutoSendActive by remember { mutableStateOf(prefs.isAutoSendActive) }
     var showFloatingCancel by remember { mutableStateOf(prefs.showFloatingCancelButton) }
+    var systemOverlayEnabled by remember { mutableStateOf(prefs.systemOverlayEnabled) }
     var isButtonsReversed by remember { mutableStateOf(prefs.isButtonsReversed) }
 
     var showImportJsonDialog by remember { mutableStateOf(false) }
     var showAdminLoginDialog by remember { mutableStateOf(false) }
+    var showFastDownloadDialog by remember { mutableStateOf(false) }
 
     val snippets by viewModel.allSnippets.collectAsState()
     val categories by viewModel.categories.collectAsState()
+
+    if (showFastDownloadDialog) {
+        FastDownloadDialog(onDismiss = { showFastDownloadDialog = false })
+    }
 
     Column(
         modifier = Modifier
@@ -102,6 +112,54 @@ fun KeyboardSettingsScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // Fast Download & Phone Install Card
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = Color(0xFF10B981).copy(alpha = 0.12f)
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = null,
+                        tint = Color(0xFF10B981),
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "⚡ Descargar o Pasar al Celular al Instante",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF10B981)
+                        )
+                        Text(
+                            text = "Genera tu código QR o copia el enlace de descarga directa para instalarlo en segundos",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Button(
+                    onClick = { showFastDownloadDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                ) {
+                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Ver QR y Enlace de Descarga Rápida", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
         // Admin Security Management Card
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
@@ -963,14 +1021,43 @@ fun KeyboardSettingsScreen(
                     }
                 )
 
-                // Floating Cancel Button Switch
+                // Floating Cancel Button Switch (Full Screen In-App & Keyboard)
                 SettingSwitchRow(
-                    title = "🛑 Botón Flotante para Cancelar lo Automático",
-                    description = "Muestra un botón flotante móvil para detener al instante cualquier ráfaga, envío múltiple o cancelar el auto-envío.",
+                    title = "🛑 Botón Flotante Móvil por Toda la Pantalla",
+                    description = "Todo el botón se puede arrastrar libremente por cualquier parte de la pantalla (arriba, abajo, izquierda, derecha) y nunca se quita cuando el teclado se baje o se cierre.",
                     checked = showFloatingCancel,
                     onCheckedChange = {
                         showFloatingCancel = it
                         prefs.showFloatingCancelButton = it
+                    }
+                )
+
+                // System Overlay Floating Button Switch (Over WhatsApp, TikTok, etc.)
+                SettingSwitchRow(
+                    title = "📱 Botón Flotante Permanente en Todo el Celular (Sobre WhatsApp, TikTok, etc.)",
+                    description = "Mantiene el botón flotante fijo en la pantalla de tu celular sobre cualquier app externa, activo incluso cuando el teclado está cerrado.",
+                    checked = systemOverlayEnabled,
+                    onCheckedChange = { isEnabled ->
+                        if (isEnabled) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
+                                Toast.makeText(context, "Autoriza 'Mostrar sobre otras apps' para activar el botón en todo el celular", Toast.LENGTH_LONG).show()
+                                val intent = Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:${context.packageName}")
+                                )
+                                context.startActivity(intent)
+                            } else {
+                                systemOverlayEnabled = true
+                                prefs.systemOverlayEnabled = true
+                                FloatingCancelOverlayService.start(context)
+                                Toast.makeText(context, "🟢 Botón flotante activado sobre todo el celular", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            systemOverlayEnabled = false
+                            prefs.systemOverlayEnabled = false
+                            FloatingCancelOverlayService.stop(context)
+                            Toast.makeText(context, "🔴 Botón flotante sobre otras apps desactivado", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 )
 

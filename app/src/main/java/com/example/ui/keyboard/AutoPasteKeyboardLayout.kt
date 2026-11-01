@@ -75,12 +75,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import com.example.service.AutoCancelController
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -282,6 +284,7 @@ fun AutoPasteKeyboardLayout(
         isCustomBatchSending = false
         customBatchProgress = 0
         customBatchTotal = 0
+        AutoCancelController.notifyAutoFinished()
 
         if (hadActiveJob) {
             Toast.makeText(context, "🛑 Envío automático cancelado con éxito", Toast.LENGTH_SHORT).show()
@@ -296,6 +299,16 @@ fun AutoPasteKeyboardLayout(
         }
     }
 
+    DisposableEffect(Unit) {
+        val listener = {
+            cancelAllAutomatic()
+        }
+        AutoCancelController.registerListener(listener)
+        onDispose {
+            AutoCancelController.unregisterListener(listener)
+        }
+    }
+
     fun stopContinuousBurst() {
         cancelAllAutomatic()
     }
@@ -307,6 +320,7 @@ fun AutoPasteKeyboardLayout(
         isCustomBatchSending = true
         customBatchProgress = 0
         customBatchTotal = count
+        AutoCancelController.notifyAutoStarted("Enviando $count")
 
         Toast.makeText(context, "🚀 Enviando $count mensajes a ${currentBurstDelayMs}ms...", Toast.LENGTH_SHORT).show()
 
@@ -318,6 +332,7 @@ fun AutoPasteKeyboardLayout(
                 for (i in 1..count) {
                     if (!isActive) break
                     customBatchProgress = i
+                    AutoCancelController.notifyAutoStarted("Enviando $i/$count")
                     if (ultraFastMode && onFastPasteAndSend != null && currentBurstDelayMs <= 30L) {
                         onFastPasteAndSend(fullText, true)
                     } else {
@@ -335,6 +350,7 @@ fun AutoPasteKeyboardLayout(
                 isCustomBatchSending = false
                 customBatchProgress = 0
                 customBatchTotal = 0
+                AutoCancelController.notifyAutoFinished()
             }
         }
     }
@@ -347,10 +363,15 @@ fun AutoPasteKeyboardLayout(
             activeBurstSnippetId = snippet.id
             val modeLabel = if (isTikTokDetected) "TikTok Live Ultra" else "Ráfaga Rápida"
             Toast.makeText(context, "🔥 $modeLabel (${currentBurstDelayMs}ms)", Toast.LENGTH_SHORT).show()
+            AutoCancelController.notifyAutoStarted("Ráfaga")
             burstJob = coroutineScope.launch {
-                while (isActive) {
-                    handlePasteSnippet(snippet, forceAutoSend = true, showToast = false)
-                    delay(currentBurstDelayMs)
+                try {
+                    while (isActive) {
+                        handlePasteSnippet(snippet, forceAutoSend = true, showToast = false)
+                        delay(currentBurstDelayMs)
+                    }
+                } finally {
+                    AutoCancelController.notifyAutoFinished()
                 }
             }
         }
@@ -981,6 +1002,9 @@ fun AutoPasteKeyboardLayout(
                 .offset { IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt()) }
                 .padding(end = 10.dp, bottom = 58.dp)
         ) {
+            var localDragX by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+            var localDragY by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+
             Surface(
                 shape = RoundedCornerShape(24.dp),
                 color = if (isAutomaticRunning) Color(0xFFDC2626) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
@@ -988,6 +1012,27 @@ fun AutoPasteKeyboardLayout(
                 tonalElevation = 6.dp,
                 modifier = Modifier
                     .testTag("btn_cancel_autopaste")
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = {
+                                localDragX = 0f
+                                localDragY = 0f
+                            },
+                            onDragEnd = {
+                                val dist = kotlin.math.hypot(localDragX.toDouble(), localDragY.toDouble())
+                                if (dist < 15.0) {
+                                    cancelAllAutomatic()
+                                }
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                localDragX += dragAmount.x
+                                localDragY += dragAmount.y
+                                fabOffsetX += dragAmount.x
+                                fabOffsetY += dragAmount.y
+                            }
+                        )
+                    }
                     .border(
                         width = if (isAutomaticRunning) 2.dp else 1.dp,
                         color = if (isAutomaticRunning) Color.White else Color(0xFFDC2626).copy(alpha = 0.5f),
@@ -996,58 +1041,34 @@ fun AutoPasteKeyboardLayout(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(start = 4.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)
+                    modifier = Modifier.padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp)
                 ) {
-                    // Drag handle
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .pointerInput(Unit) {
-                                detectDragGestures { change, dragAmount ->
-                                    change.consume()
-                                    fabOffsetX += dragAmount.x
-                                    fabOffsetY += dragAmount.y
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.DragHandle,
-                            contentDescription = "Mover botón flotante",
-                            tint = if (isAutomaticRunning) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    // Main clickable Cancel button
-                    Row(
-                        modifier = Modifier
-                            .clickable {
-                                cancelAllAutomatic()
-                            }
-                            .padding(vertical = 4.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.StopCircle,
-                            contentDescription = "Cancelar lo Automático",
-                            tint = if (isAutomaticRunning) Color.White else Color(0xFFDC2626),
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Text(
-                            text = when {
-                                isCustomBatchSending -> "Cancelar ($customBatchProgress/$customBatchTotal)"
-                                activeBurstSnippetId != null -> "Cancelar Ráfaga"
-                                isAutomaticRunning -> "Cancelar Automático"
-                                isAutoSendActive -> "Auto: ON (Cancelar)"
-                                else -> "Cancelar Auto"
-                            },
-                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
-                            fontWeight = FontWeight.Bold,
-                            color = if (isAutomaticRunning) Color.White else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.DragHandle,
+                        contentDescription = "Mover botón flotante",
+                        tint = if (isAutomaticRunning) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.Default.StopCircle,
+                        contentDescription = "Cancelar lo Automático",
+                        tint = if (isAutomaticRunning) Color.White else Color(0xFFDC2626),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = when {
+                            isCustomBatchSending -> "Cancelar ($customBatchProgress/$customBatchTotal)"
+                            activeBurstSnippetId != null -> "Cancelar Ráfaga"
+                            isAutomaticRunning -> "Cancelar Automático"
+                            isAutoSendActive -> "Auto: ON (Cancelar)"
+                            else -> "Cancelar Auto"
+                        },
+                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = if (isAutomaticRunning) Color.White else MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
         }

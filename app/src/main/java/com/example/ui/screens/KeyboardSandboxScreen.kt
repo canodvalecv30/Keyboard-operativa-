@@ -20,10 +20,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.KeyboardHide
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.TouchApp
+import com.example.ui.dialogs.FastDownloadDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -79,6 +81,11 @@ fun KeyboardSandboxScreen(
     val snippets by viewModel.allSnippets.collectAsState()
 
     var testInputText by remember { mutableStateOf("") }
+    var showFastDownloadDialog by remember { mutableStateOf(false) }
+
+    if (showFastDownloadDialog) {
+        FastDownloadDialog(onDismiss = { showFastDownloadDialog = false })
+    }
 
     Column(
         modifier = Modifier
@@ -124,6 +131,26 @@ fun KeyboardSandboxScreen(
                         )
                     }
                 }
+            }
+
+            // Quick Fast Download Action Banner
+            Button(
+                onClick = { showFastDownloadDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Download,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "⚡ Descargar Rápido al Celular (QR / Link)",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
             }
 
             // Quick Auto Keyboard Open & Close Action Buttons
