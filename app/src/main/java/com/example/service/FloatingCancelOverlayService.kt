@@ -6,21 +6,23 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.example.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,8 +33,9 @@ import kotlinx.coroutines.launch
 import kotlin.math.hypot
 
 /**
- * Android Foreground / System Overlay Service that keeps the floating cancel button
+ * Android System Overlay Service that keeps the floating cancel button
  * visible over any app on the phone (WhatsApp, TikTok, etc.) even when the keyboard is lowered/closed.
+ * Fully hardened against SecurityException, Android 14+ FGS requirements, and BadTokenException.
  */
 class FloatingCancelOverlayService : Service() {
 
@@ -46,24 +49,34 @@ class FloatingCancelOverlayService : Service() {
     private var initialTouchY = 0f
 
     companion object {
+        private const val TAG = "FloatingCancelOverlay"
         const val CHANNEL_ID = "floating_cancel_channel"
         const val NOTIFICATION_ID = 1042
 
         fun start(context: Context) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
-                return
-            }
-            val intent = Intent(context, FloatingCancelOverlayService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
+                    Log.w(TAG, "Cannot start overlay: overlay permission not granted")
+                    return
+                }
+                val intent = Intent(context, FloatingCancelOverlayService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Error starting FloatingCancelOverlayService", t)
             }
         }
 
         fun stop(context: Context) {
-            val intent = Intent(context, FloatingCancelOverlayService::class.java)
-            context.stopService(intent)
+            try {
+                val intent = Intent(context, FloatingCancelOverlayService::class.java)
+                context.stopService(intent)
+            } catch (t: Throwable) {
+                Log.e(TAG, "Error stopping FloatingCancelOverlayService", t)
+            }
         }
     }
 
@@ -71,43 +84,84 @@ class FloatingCancelOverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification())
+        try {
+            createNotificationChannel()
+            val notification = buildNotification()
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ServiceCompat.startForeground(
+                    this,
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_NONE)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Error starting foreground notification", t)
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            Log.w(TAG, "Overlay permission revoked, stopping service")
             stopSelf()
             return
         }
 
-        initOverlayView()
+        try {
+            initOverlayView()
+        } catch (t: Throwable) {
+            Log.e(TAG, "Error initializing overlay view", t)
+            stopSelf()
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (overlayView == null && (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this))) {
+            try {
+                initOverlayView()
+            } catch (t: Throwable) {
+                Log.e(TAG, "Error re-initializing overlay in onStartCommand", t)
+            }
+        }
+        return START_STICKY
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Botón Flotante Permanente",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Permite mantener el botón de cancelar visible en todo el celular"
+            try {
+                val channel = NotificationChannel(
+                    CHANNEL_ID,
+                    "Botón Flotante Permanente",
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = "Mantiene el botón de cancelar visible en todo el celular"
+                    setShowBadge(false)
+                }
+                val manager = getSystemService(NotificationManager::class.java)
+                manager?.createNotificationChannel(channel)
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to create notification channel", t)
             }
-            val manager = getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(channel)
         }
     }
 
     private fun buildNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Botón Flotante Activo")
-            .setContentText("Mueve el botón por toda la pantalla para cancelar envíos automáticos")
+            .setContentText("Toca para cancelar envíos automáticos en cualquier app")
             .setSmallIcon(R.mipmap.ic_launcher)
+            .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
     private fun initOverlayView() {
         try {
-            windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            windowManager = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+            if (windowManager == null) return
 
             val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -130,7 +184,7 @@ class FloatingCancelOverlayService : Service() {
                 y = 300
             }
 
-            // Build Draggable Pill Layout
+            // Build Draggable Pill Layout using native safe components
             val pillLayout = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -142,18 +196,24 @@ class FloatingCancelOverlayService : Service() {
                     setStroke(dpToPx(2), Color.parseColor("#EF4444"))
                 }
                 background = bg
+                isClickable = true
+                isFocusable = false
             }
 
-            val iconView = ImageView(this).apply {
-                setImageResource(android.R.drawable.ic_delete)
-                setColorFilter(Color.parseColor("#EF4444"))
-                val lp = LinearLayout.LayoutParams(dpToPx(20), dpToPx(20))
-                lp.marginEnd = dpToPx(8)
+            val iconView = TextView(this).apply {
+                text = "🛑"
+                textSize = 16f
+                gravity = Gravity.CENTER
+                val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                lp.marginEnd = dpToPx(6)
                 layoutParams = lp
             }
 
             val textView = TextView(this).apply {
-                text = "🛑 Cancelar Auto"
+                text = "Cancelar Auto"
                 setTextColor(Color.WHITE)
                 textSize = 13f
                 typeface = android.graphics.Typeface.DEFAULT_BOLD
@@ -162,7 +222,7 @@ class FloatingCancelOverlayService : Service() {
             pillLayout.addView(iconView)
             pillLayout.addView(textView)
 
-            // Touch Listener that allows moving across entire screen
+            // Touch Listener that allows unrestricted movement across entire screen
             pillLayout.setOnTouchListener { _, event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
@@ -177,8 +237,8 @@ class FloatingCancelOverlayService : Service() {
                         params.y = initialY + (event.rawY - initialTouchY).toInt()
                         try {
                             windowManager?.updateViewLayout(pillLayout, params)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
+                        } catch (t: Throwable) {
+                            Log.e(TAG, "Error updating overlay layout", t)
                         }
                         true
                     }
@@ -186,10 +246,10 @@ class FloatingCancelOverlayService : Service() {
                         val diffX = event.rawX - initialTouchX
                         val diffY = event.rawY - initialTouchY
                         val distance = hypot(diffX.toDouble(), diffY.toDouble())
-                        if (distance < 15.0) {
-                            // Tap detected!
+                        if (distance < 18.0) {
+                            // Tap detected on the overlay button!
                             AutoCancelController.triggerCancel()
-                            Toast.makeText(this, "🛑 Envíos automáticos cancelados", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@FloatingCancelOverlayService, "🛑 Envíos automáticos cancelados", Toast.LENGTH_SHORT).show()
                         }
                         true
                     }
@@ -197,26 +257,30 @@ class FloatingCancelOverlayService : Service() {
                 }
             }
 
-            // Observe automatic active state to highlight button
+            // Observe automatic active state to update button colors in real time
             serviceScope.launch {
                 AutoCancelController.isAutomaticActive.collectLatest { isActive ->
-                    val bg = pillLayout.background as? GradientDrawable
-                    if (isActive) {
-                        bg?.setColor(Color.parseColor("#DC2626"))
-                        bg?.setStroke(dpToPx(2), Color.WHITE)
-                        textView.text = "🛑 DETENER"
-                    } else {
-                        bg?.setColor(Color.parseColor("#1E293B"))
-                        bg?.setStroke(dpToPx(2), Color.parseColor("#EF4444"))
-                        textView.text = "🛑 Cancelar Auto"
+                    try {
+                        val bg = pillLayout.background as? GradientDrawable
+                        if (isActive) {
+                            bg?.setColor(Color.parseColor("#DC2626"))
+                            bg?.setStroke(dpToPx(2), Color.WHITE)
+                            textView.text = "DETENER"
+                        } else {
+                            bg?.setColor(Color.parseColor("#1E293B"))
+                            bg?.setStroke(dpToPx(2), Color.parseColor("#EF4444"))
+                            textView.text = "Cancelar Auto"
+                        }
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "Error updating pill appearance", t)
                     }
                 }
             }
 
             windowManager?.addView(pillLayout, params)
             overlayView = pillLayout
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to create overlay view", t)
         }
     }
 
@@ -231,9 +295,10 @@ class FloatingCancelOverlayService : Service() {
         overlayView?.let { view ->
             try {
                 windowManager?.removeView(view)
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } catch (t: Throwable) {
+                Log.e(TAG, "Error removing overlay view in onDestroy", t)
             }
         }
+        overlayView = null
     }
 }

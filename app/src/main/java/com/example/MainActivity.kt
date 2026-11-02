@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Settings
@@ -48,8 +47,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.collectAsState
-import com.example.ui.dialogs.FastDownloadDialog
 import com.example.ui.keyboard.FullDraggableFloatingCancelButton
+import com.example.ui.screens.AccountActivationScreen
 import com.example.ui.screens.AppBackgroundView
 import com.example.ui.screens.KeyboardSandboxScreen
 import com.example.ui.screens.KeyboardSettingsScreen
@@ -78,13 +77,10 @@ class MainActivity : ComponentActivity() {
                 var isAuthenticated by remember { mutableStateOf(false) }
                 var isAdmin by remember { mutableStateOf(false) }
                 var selectedTab by remember { mutableIntStateOf(0) }
-                var showFastDownloadDialog by remember { mutableStateOf(false) }
 
-                if (showFastDownloadDialog) {
-                    FastDownloadDialog(
-                        onDismiss = { showFastDownloadDialog = false }
-                    )
-                }
+                val userProfile by viewModel.currentUserProfile.collectAsState()
+                val effectiveIsAdmin = isAdmin || userProfile?.role == "admin"
+                val isAccountPendingActivation = userProfile != null && !userProfile!!.isActive && !effectiveIsAdmin
 
                 if (!isAuthenticated) {
                     LockScreen(
@@ -92,6 +88,18 @@ class MainActivity : ComponentActivity() {
                         onUnlocked = { adminStatus ->
                             isAuthenticated = true
                             isAdmin = adminStatus
+                        }
+                    )
+                } else if (isAccountPendingActivation) {
+                    AccountActivationScreen(
+                        viewModel = viewModel,
+                        profile = userProfile!!,
+                        onActivated = {
+                            // User activated successfully - state flow handles UI refresh automatically
+                        },
+                        onSignOut = {
+                            isAuthenticated = false
+                            isAdmin = false
                         }
                     )
                 } else {
@@ -129,7 +137,7 @@ class MainActivity : ComponentActivity() {
                                             }
                                             Spacer(modifier = Modifier.width(10.dp))
                                             Text(
-                                                text = if (isAdmin) "Spam de la Operativa (Admin)" else "Spam de la Operativa Keyboard",
+                                                text = if (effectiveIsAdmin) "Spam de la Operativa (Admin)" else "Spam de la Operativa Keyboard",
                                                 fontWeight = FontWeight.Bold,
                                                 style = MaterialTheme.typography.titleMedium,
                                                 maxLines = 1
@@ -152,16 +160,6 @@ class MainActivity : ComponentActivity() {
                                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                                                 )
                                             }
-                                        }
-
-                                        IconButton(
-                                            onClick = { showFastDownloadDialog = true }
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Download,
-                                                contentDescription = "Descarga Rápida al Celular",
-                                                tint = Color(0xFF10B981)
-                                            )
                                         }
                                     },
                                     colors = TopAppBarDefaults.topAppBarColors(
@@ -207,7 +205,7 @@ class MainActivity : ComponentActivity() {
                                     1 -> SnippetsManagerScreen(viewModel = viewModel)
                                     2 -> KeyboardSettingsScreen(
                                         viewModel = viewModel,
-                                        isAdmin = isAdmin,
+                                        isAdmin = effectiveIsAdmin,
                                         onAdminStatusChange = { newAdmin -> isAdmin = newAdmin }
                                     )
                                 }

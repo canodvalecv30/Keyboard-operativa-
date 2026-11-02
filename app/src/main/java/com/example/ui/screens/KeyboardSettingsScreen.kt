@@ -63,7 +63,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.CategoryEntity
 import com.example.data.model.SnippetEntity
-import com.example.ui.dialogs.FastDownloadDialog
 import com.example.ui.viewmodel.MainViewModel
 import org.json.JSONArray
 import org.json.JSONObject
@@ -96,14 +95,9 @@ fun KeyboardSettingsScreen(
 
     var showImportJsonDialog by remember { mutableStateOf(false) }
     var showAdminLoginDialog by remember { mutableStateOf(false) }
-    var showFastDownloadDialog by remember { mutableStateOf(false) }
 
     val snippets by viewModel.allSnippets.collectAsState()
     val categories by viewModel.categories.collectAsState()
-
-    if (showFastDownloadDialog) {
-        FastDownloadDialog(onDismiss = { showFastDownloadDialog = false })
-    }
 
     Column(
         modifier = Modifier
@@ -115,52 +109,9 @@ fun KeyboardSettingsScreen(
         // Official Google Account & Unique ID Profile Card
         AccountProfileCard(viewModel = viewModel)
 
-        // Fast Download & Phone Install Card
-        ElevatedCard(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = Color(0xFF10B981).copy(alpha = 0.12f)
-            )
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Download,
-                        contentDescription = null,
-                        tint = Color(0xFF10B981),
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "⚡ Descargar o Pasar al Celular al Instante",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF10B981)
-                        )
-                        Text(
-                            text = "Genera tu código QR o copia el enlace de descarga directa para instalarlo en segundos",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                Button(
-                    onClick = { showFastDownloadDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
-                ) {
-                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Ver QR y Enlace de Descarga Rápida", fontWeight = FontWeight.Bold)
-                }
-            }
+        if (isAdmin) {
+            // Admin Panel: Management of Google Accounts, IDs, Activation Toggles & 6-digit Codes
+            AdminIdManagerSection(viewModel = viewModel)
         }
 
         // Admin Security Management Card
@@ -1044,22 +995,38 @@ fun KeyboardSettingsScreen(
                         if (isEnabled) {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
                                 Toast.makeText(context, "Autoriza 'Mostrar sobre otras apps' para activar el botón en todo el celular", Toast.LENGTH_LONG).show()
-                                val intent = Intent(
-                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    Uri.parse("package:${context.packageName}")
-                                )
-                                context.startActivity(intent)
+                                try {
+                                    val intent = Intent(
+                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:${context.packageName}")
+                                    )
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    try {
+                                        context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+                                    } catch (e2: Exception) {
+                                        Toast.makeText(context, "Por favor autoriza el permiso en Ajustes de tu teléfono", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
                             } else {
-                                systemOverlayEnabled = true
-                                prefs.systemOverlayEnabled = true
-                                FloatingCancelOverlayService.start(context)
-                                Toast.makeText(context, "🟢 Botón flotante activado sobre todo el celular", Toast.LENGTH_SHORT).show()
+                                try {
+                                    systemOverlayEnabled = true
+                                    prefs.systemOverlayEnabled = true
+                                    FloatingCancelOverlayService.start(context)
+                                    Toast.makeText(context, "🟢 Botón flotante activado sobre todo el celular", Toast.LENGTH_SHORT).show()
+                                } catch (t: Throwable) {
+                                    Toast.makeText(context, "No se pudo iniciar el servicio de botón flotante", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         } else {
-                            systemOverlayEnabled = false
-                            prefs.systemOverlayEnabled = false
-                            FloatingCancelOverlayService.stop(context)
-                            Toast.makeText(context, "🔴 Botón flotante sobre otras apps desactivado", Toast.LENGTH_SHORT).show()
+                            try {
+                                systemOverlayEnabled = false
+                                prefs.systemOverlayEnabled = false
+                                FloatingCancelOverlayService.stop(context)
+                                Toast.makeText(context, "🔴 Botón flotante sobre otras apps desactivado", Toast.LENGTH_SHORT).show()
+                            } catch (t: Throwable) {
+                                t.printStackTrace()
+                            }
                         }
                     }
                 )

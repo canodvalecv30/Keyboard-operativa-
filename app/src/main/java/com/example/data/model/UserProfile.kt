@@ -12,6 +12,8 @@ data class UserProfile(
     val email: String = "",
     val photoUrl: String = "",
     val role: String = "operador",
+    val isActive: Boolean = false,
+    val activationCode: String = "",
     @ServerTimestamp
     val createdAt: Timestamp? = null,
     @ServerTimestamp

@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.runtime.LaunchedEffect
@@ -47,6 +48,7 @@ fun LockScreen(
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
 
+    val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
@@ -323,6 +325,15 @@ fun LockScreen(
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
                                 )
                             }
+
+                            if (!profile.isActive && profile.role != "admin") {
+                                Text(
+                                    text = "⚠️ Requiere activación con código de 6 dígitos",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFFFBBF24)
+                                )
+                            }
                             Button(
                                 onClick = {
                                     val isAdmin = profile.role == "admin"
@@ -338,7 +349,7 @@ fun LockScreen(
                 } else {
                     Button(
                         onClick = {
-                            viewModel.signInWithGoogle { success, msg ->
+                            viewModel.signInWithGoogle(context) { success, msg ->
                                 if (success) {
                                     val profile = viewModel.currentUserProfile.value
                                     val isAdmin = profile?.role == "admin"

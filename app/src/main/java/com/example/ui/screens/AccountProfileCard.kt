@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
@@ -117,27 +118,28 @@ fun AccountProfileCard(
                 }
 
                 if (userProfile != null) {
+                    val isActive = userProfile!!.isActive
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFF10B981).copy(alpha = 0.15f),
-                        border = BorderStroke(1.dp, Color(0xFF10B981))
+                        color = if (isActive) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFEF4444).copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, if (isActive) Color(0xFF10B981) else Color(0xFFEF4444))
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.CheckCircle,
+                                imageVector = if (isActive) Icons.Default.CheckCircle else Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = Color(0xFF10B981),
+                                tint = if (isActive) Color(0xFF10B981) else Color(0xFFEF4444),
                                 modifier = Modifier.size(12.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Activa",
+                                text = if (isActive) "Activa" else "Inactiva",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF10B981)
+                                color = if (isActive) Color(0xFF10B981) else Color(0xFFEF4444)
                             )
                         }
                     }
@@ -170,7 +172,7 @@ fun AccountProfileCard(
 
                         Button(
                             onClick = {
-                                viewModel.signInWithGoogle { success, message ->
+                                viewModel.signInWithGoogle(context) { success, message ->
                                     if (success) {
                                         viewModel.currentUserProfile.value?.let { onAuthSuccess(it) }
                                         Toast.makeText(context, message ?: "¡Sesión iniciada con éxito!", Toast.LENGTH_LONG).show()

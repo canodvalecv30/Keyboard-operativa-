@@ -62,6 +62,8 @@ class UserRepository(
         val isAdmin = firebaseUser.email?.contains("operativa", ignoreCase = true) == true ||
                 firebaseUser.displayName?.contains("david", ignoreCase = true) == true
 
+        val sixDigitCode = com.example.data.auth.AccountActivationManager.generateActivationCodeForId(generatedAccountId)
+
         val newProfile = UserProfile(
             id = firebaseUser.uid,
             accountId = generatedAccountId,
@@ -69,14 +71,63 @@ class UserRepository(
             email = firebaseUser.email ?: "usuario@operativa.app",
             photoUrl = firebaseUser.photoUrl?.toString() ?: "",
             role = if (isAdmin) "admin" else "operador",
+            isActive = isAdmin, // Admins active by default, regular operators require activation
+            activationCode = sixDigitCode,
             createdAt = null, // @ServerTimestamp will populate this
             updatedAt = null
         )
 
         docRef.set(newProfile).await()
-        Log.i(TAG, "Nuevo usuario registrado con ID: $generatedAccountId")
+        Log.i(TAG, "Nuevo usuario registrado con ID: $generatedAccountId (Activo: $isAdmin)")
 
         return newProfile.copy(accountId = generatedAccountId)
+    }
+
+    fun observeAllProfiles(): Flow<List<UserProfile>> {
+        return db.collection(USERS_COLLECTION)
+            .snapshots()
+            .map { snapshot ->
+                snapshot.documents.mapNotNull { doc ->
+                    doc.toObject(UserProfile::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+                }
+            }
+    }
+
+    suspend fun updateUserActivation(userId: String, isActive: Boolean): Result<Unit> {
+        return try {
+            db.collection(USERS_COLLECTION).document(userId)
+                .update(
+                    mapOf(
+                        "isActive" to isActive,
+                        "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )
+                ).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating user activation", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun activateAccountWithCode(userId: String, accountId: String, code: String): Result<Boolean> {
+        val isValid = com.example.data.auth.AccountActivationManager.validateActivationCode(accountId, code)
+        if (!isValid) {
+            return Result.success(false)
+        }
+
+        return try {
+            db.collection(USERS_COLLECTION).document(userId)
+                .update(
+                    mapOf(
+                        "isActive" to true,
+                        "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )
+                ).await()
+            Result.success(true)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error activating account with code", e)
+            Result.failure(e)
+        }
     }
 
     fun signOut() {

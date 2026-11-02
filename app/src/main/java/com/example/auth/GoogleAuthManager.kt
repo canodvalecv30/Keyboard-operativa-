@@ -1,6 +1,8 @@
 package com.example.auth
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.util.Log
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
@@ -16,18 +18,29 @@ import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.tasks.await
 
 class GoogleAuthManager(
-    private val context: Context,
     private val userRepository: UserRepository
 ) {
     companion object {
         private const val TAG = "GoogleAuthManager"
     }
 
-    private val credentialManager = CredentialManager.create(context)
     private val auth = FirebaseAuth.getInstance()
 
-    suspend fun signInWithGoogle(): Result<UserProfile?> {
-        val serverClientId = context.getString(R.string.default_web_client_id)
+    private fun Context.findActivity(): Activity? {
+        var current = this
+        while (current is ContextWrapper) {
+            if (current is Activity) return current
+            current = current.baseContext
+        }
+        return null
+    }
+
+    suspend fun signInWithGoogle(context: Context): Result<UserProfile?> {
+        val activity = context.findActivity()
+            ?: return Result.failure(Exception("Contexto de Activity no encontrado para lanzar selector de Google"))
+
+        val serverClientId = activity.getString(R.string.default_web_client_id)
+        val credentialManager = CredentialManager.create(activity)
 
         return try {
             val googleIdOption = GetSignInWithGoogleOption.Builder(serverClientId)
@@ -37,7 +50,7 @@ class GoogleAuthManager(
                 .addCredentialOption(googleIdOption)
                 .build()
 
-            val response = credentialManager.getCredential(context, request)
+            val response = credentialManager.getCredential(activity, request)
             val credential = response.credential
 
             if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {

@@ -29,7 +29,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isOwner(userId) && isValidUserProfile(request.resource.data);
-      allow update: if isOwner(userId) &&
+      allow update: if isAuthenticated() &&
         request.resource.data.id == resource.data.id &&
         request.resource.data.accountId == resource.data.accountId &&
         request.resource.data.createdAt == resource.data.createdAt;

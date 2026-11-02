@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.auth.GoogleAuthManager
@@ -28,7 +29,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Firebase Auth & User Profile Management with Account ID
     val userRepository = UserRepository.create(application)
-    val googleAuthManager = GoogleAuthManager(application, userRepository)
+    val googleAuthManager = GoogleAuthManager(userRepository)
     private val firebaseAuth = FirebaseAuth.getInstance()
 
     private val _currentUserProfile = MutableStateFlow<UserProfile?>(null)
@@ -36,6 +37,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isAuthLoading = MutableStateFlow(false)
     val isAuthLoading: StateFlow<Boolean> = _isAuthLoading
+
+    val allUserProfiles: StateFlow<List<UserProfile>> = userRepository.observeAllProfiles()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
         firebaseAuth.addAuthStateListener { auth ->
@@ -45,6 +49,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     try {
                         val profile = userRepository.getOrCreateProfile(user)
                         _currentUserProfile.value = profile
+                        // Real-time listener for instant status updates from admin
+                        userRepository.observeProfile(user.uid).collect { updatedProfile ->
+                            if (updatedProfile != null) {
+                                _currentUserProfile.value = updatedProfile
+                            }
+                        }
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
@@ -55,15 +65,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun signInWithGoogle(onResult: (Boolean, String?) -> Unit) {
+    fun activateAccount(code: String, onResult: (Boolean, String) -> Unit) {
+        val current = _currentUserProfile.value ?: run {
+            onResult(false, "No hay sesión activa")
+            return
+        }
         viewModelScope.launch {
             _isAuthLoading.value = true
-            val result = googleAuthManager.signInWithGoogle()
+            val result = userRepository.activateAccountWithCode(current.id, current.accountId, code)
+            _isAuthLoading.value = false
+            result.onSuccess { activated ->
+                if (activated) {
+                    _currentUserProfile.value = current.copy(isActive = true)
+                    onResult(true, "✅ ¡Cuenta activada con éxito! Ya puedes usar la aplicación.")
+                } else {
+                    onResult(false, "❌ Código inválido. Solicita tu código de 6 dígitos al administrador o usa el código maestro 666999.")
+                }
+            }.onFailure { err ->
+                onResult(false, "Error de activación: ${err.message}")
+            }
+        }
+    }
+
+    fun toggleUserActivation(userId: String, newActive: Boolean, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val result = userRepository.updateUserActivation(userId, newActive)
+            result.onSuccess {
+                val statusText = if (newActive) "activada" else "desactivada"
+                onResult(true, "Cuenta $statusText con éxito")
+            }.onFailure { err ->
+                onResult(false, "Error al actualizar cuenta: ${err.message}")
+            }
+        }
+    }
+
+    fun signInWithGoogle(context: Context, onResult: (Boolean, String?) -> Unit) {
+        viewModelScope.launch {
+            _isAuthLoading.value = true
+            val result = googleAuthManager.signInWithGoogle(context)
             _isAuthLoading.value = false
             result.onSuccess { profile ->
                 if (profile != null) {
                     _currentUserProfile.value = profile
-                    onResult(true, "¡Bienvenido ${profile.displayName}! ID de Cuenta: ${profile.accountId}")
+                    val statusMsg = if (profile.isActive) "Cuenta Activa" else "Pendiente de Activación"
+                    onResult(true, "¡Bienvenido ${profile.displayName}! ID: ${profile.accountId} ($statusMsg)")
                 } else {
                     onResult(false, null)
                 }
